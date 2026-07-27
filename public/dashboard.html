@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - USSD Attendance</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <h1><a href="/dashboard.html" style="color:white;text-decoration:none;">USSD Attendance</a></h1>
+    <div>
+      <span id="lecturerName" style="color:#a0aec0;margin-right:1rem;font-size:0.9rem;"></span>
+      <a href="#" onclick="logout()">Logout</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Active Session Display -->
+    <div id="activeSession" class="hidden">
+      <div class="session-display">
+        <div style="font-size:0.9rem;text-transform:uppercase;letter-spacing:0.1rem;">Current Session Code</div>
+        <div class="session-code" id="sessionCodeDisplay">----</div>
+        <div class="session-meta" id="sessionUnitName"></div>
+        <div class="countdown" id="sessionCountdown"></div>
+        <button class="btn btn-danger btn-sm" style="margin-top:1rem;" onclick="endSession()">End Session</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-number" id="statUnits">0</div>
+        <div class="stat-label">Units</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="statSessions">0</div>
+        <div class="stat-label">Active Sessions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="statAttendance">0</div>
+        <div class="stat-label">Total Sign-ins</div>
+      </div>
+    </div>
+
+    <!-- Create Unit -->
+    <div class="card">
+      <h2>Create Unit</h2>
+      <div id="unitError" class="alert alert-error hidden"></div>
+      <div id="unitSuccess" class="alert alert-success hidden"></div>
+      <form id="createUnitForm" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <input type="text" id="unitName" placeholder="Unit name (e.g. Computer Science 101)" style="flex:2;min-width:200px;padding:0.7rem 1rem;border:1px solid #e2e8f0;border-radius:8px;font-size:1rem;">
+        <input type="text" id="unitCode" placeholder="Code (e.g. CS101)" style="flex:1;min-width:120px;padding:0.7rem 1rem;border:1px solid #e2e8f0;border-radius:8px;font-size:1rem;">
+        <button type="submit" class="btn btn-primary" id="createUnitBtn">Create</button>
+      </form>
+    </div>
+
+    <!-- Units List -->
+    <div class="card">
+      <h2>Your Units</h2>
+      <div id="unitsList">
+        <div class="empty-state"><p>Loading units...</p></div>
+      </div>
+    </div>
+
+    <!-- Attendance Viewer -->
+    <div id="attendanceSection" class="card hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 id="attendanceTitle">Attendance</h2>
+        <button class="btn btn-outline btn-sm" onclick="closeAttendance()">Close</button>
+      </div>
+      <div id="attendanceContent"></div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!API.isLoggedIn()) window.location.href = '/login.html';
+
+    const lecturer = JSON.parse(localStorage.getItem('lecturer') || '{}');
+    document.getElementById('lecturerName').textContent = lecturer.name || '';
+
+    let activeSession = null;
+    let countdownInterval = null;
+    let units = [];
+
+    // Logout
+    function logout() {
+      API.clearToken();
+      localStorage.removeItem('lecturer');
+      window.location.href = '/login.html';
+    }
+
+    // Load units
+    async function loadUnits() {
+      try {
+        const data = await API.get('/units');
+        units = data.units;
+        document.getElementById('statUnits').textContent = units.length;
+        renderUnits();
+      } catch (err) {
+        document.getElementById('unitsList').innerHTML = '<div class="empty-state"><p>Failed to load units</p></div>';
+      }
+    }
+
+    function renderUnits() {
+      const container = document.getElementById('unitsList');
+      if (units.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No units yet. Create one above.</p></div>';
+        return;
+      }
+      container.innerHTML = units.map(u => `
+        <div class="unit-card">
+          <div class="unit-info">
+            <h3>${u.name}</h3>
+            <p>Code: ${u.code}</p>
+          </div>
+          <div class="unit-actions">
+            <button class="btn btn-success btn-sm" onclick="startSession('${u.id}', '${u.name}')">Start Session</button>
+            <button class="btn btn-outline btn-sm" onclick="viewAttendance('${u.id}', '${u.name}')">Attendance</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Create unit
+    document.getElementById('createUnitForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('createUnitBtn');
+      const errDiv = document.getElementById('unitError');
+      const successDiv = document.getElementById('unitSuccess');
+      errDiv.classList.add('hidden');
+      successDiv.classList.add('hidden');
+      btn.disabled = true;
+
+      try {
+        await API.post('/units', {
+          name: document.getElementById('unitName').value,
+          code: document.getElementById('unitCode').value,
+        });
+        document.getElementById('unitName').value = '';
+        document.getElementById('unitCode').value = '';
+        successDiv.textContent = 'Unit created!';
+        successDiv.classList.remove('hidden');
+        loadUnits();
+        setTimeout(() => successDiv.classList.add('hidden'), 3000);
+      } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.classList.remove('hidden');
+      }
+      btn.disabled = false;
+    });
+
+    // Start session
+    async function startSession(unitId, unitName) {
+      try {
+        const data = await API.post('/sessions', { unit_id: unitId });
+        activeSession = {
+          ...data.session,
+          unit_name: unitName,
+          expires_at: new Date(data.session.expires_at),
+        };
+        showActiveSession();
+      } catch (err) {
+        alert('Failed to start session: ' + err.message);
+      }
+    }
+
+    function showActiveSession() {
+      document.getElementById('activeSession').classList.remove('hidden');
+      document.getElementById('sessionCodeDisplay').textContent = activeSession.session_code;
+      document.getElementById('sessionUnitName').textContent = activeSession.unit_name;
+      document.getElementById('statSessions').textContent = '1';
+
+      if (countdownInterval) clearInterval(countdownInterval);
+      countdownInterval = setInterval(updateCountdown, 1000);
+      updateCountdown();
+    }
+
+    function updateCountdown() {
+      if (!activeSession) return;
+      const now = new Date();
+      const diff = activeSession.expires_at - now;
+      if (diff <= 0) {
+        document.getElementById('sessionCountdown').textContent = 'Session expired';
+        document.getElementById('activeSession').classList.add('hidden');
+        document.getElementById('statSessions').textContent = '0';
+        clearInterval(countdownInterval);
+        activeSession = null;
+        return;
+      }
+      const mins = Math.floor(diff / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      document.getElementById('sessionCountdown').textContent =
+        `Expires in ${mins}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function endSession() {
+      activeSession = null;
+      if (countdownInterval) clearInterval(countdownInterval);
+      document.getElementById('activeSession').classList.add('hidden');
+      document.getElementById('statSessions').textContent = '0';
+    }
+
+    // View attendance
+    async function viewAttendance(unitId, unitName) {
+      const section = document.getElementById('attendanceSection');
+      const content = document.getElementById('attendanceContent');
+      const title = document.getElementById('attendanceTitle');
+
+      title.textContent = `Sessions - ${unitName}`;
+      section.classList.remove('hidden');
+      content.innerHTML = '<p style="color:#718096;">Loading sessions...</p>';
+
+      try {
+        const data = await API.get('/sessions/unit/' + unitId);
+        if (data.sessions.length === 0) {
+          content.innerHTML = '<div class="empty-state"><p>No sessions yet for this unit.</p></div>';
+          return;
+        }
+        content.innerHTML = `
+          <table class="attendance-table">
+            <thead>
+              <tr><th>Code</th><th>Date</th><th>Status</th><th>Signed In</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${data.sessions.map(s => `
+                <tr>
+                  <td style="font-weight:600;font-family:monospace;">${s.session_code}</td>
+                  <td>${new Date(s.created_at).toLocaleString()}</td>
+                  <td>${s.is_active ? '<span style="color:#16a34a;font-weight:600;">Active</span>' : '<span style="color:#a0aec0;">Ended</span>'}</td>
+                  <td>${s.attendance_count}</td>
+                  <td><button class="btn btn-outline btn-sm" onclick="fetchAttendance('${s.id}')">View</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        content.innerHTML = `<p style="color:#dc2626;">${err.message}</p>`;
+      }
+    }
+
+    async function fetchAttendance(sessionId) {
+      const content = document.getElementById('attendanceContent');
+      const title = document.getElementById('attendanceTitle');
+      title.textContent = 'Attendance Details';
+      content.innerHTML = '<p style="color:#718096;">Loading...</p>';
+
+      try {
+        const data = await API.get('/sessions/' + sessionId + '/attendance');
+        if (data.attendance.length === 0) {
+          content.innerHTML = '<div class="empty-state"><p>No attendance records for this session.</p></div><button class="btn btn-outline btn-sm mt-1" onclick="closeAttendance()">Back</button></div>';
+          return;
+        }
+        content.innerHTML = `
+          <p style="margin-bottom:1rem;color:#718096;">${data.total_signed_in} student(s) signed in</p>
+          <table class="attendance-table">
+            <thead>
+              <tr><th>Name</th><th>Student ID</th><th>Phone</th><th>Signed In At</th></tr>
+            </thead>
+            <tbody>
+              ${data.attendance.map(a => `
+                <tr>
+                  <td>${a.name}</td>
+                  <td>${a.student_id}</td>
+                  <td>${a.phone_number}</td>
+                  <td>${new Date(a.signed_in_at).toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <button class="btn btn-outline btn-sm mt-1" onclick="closeAttendance()">Back</button>
+        `;
+      } catch (err) {
+        content.innerHTML = `<p style="color:#dc2626;">${err.message}</p><button class="btn btn-outline btn-sm mt-1" onclick="closeAttendance()">Back</button>`;
+      }
+    }
+
+    function closeAttendance() {
+      document.getElementById('attendanceSection').classList.add('hidden');
+    }
+
+    // Init
+    loadUnits();
+  </script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - USSD Attendance</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <h1><a href="/" style="color:white;text-decoration:none;">USSD Attendance</a></h1>
+    <div>
+      <a href="/login.html">Login</a>
+      <a href="/register.html">Register</a>
+    </div>
+  </nav>
+
+  <div class="auth-container">
+    <div class="card">
+      <h2>Lecturer Login</h2>
+      <div id="error" class="alert alert-error hidden"></div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="email" required placeholder="you@university.edu">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password" required placeholder="Your password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;" id="submitBtn">Login</button>
+      </form>
+      <p class="text-center mt-1" style="color:#718096; font-size:0.9rem;">
+        Don't have an account? <a href="/register.html" style="color:#4a6cf7;">Register</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (API.isLoggedIn()) window.location.href = '/dashboard.html';
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const errDiv = document.getElementById('error');
+      errDiv.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Logging in...';
+
+      try {
+        const data = await API.post('/auth/login', {
+          email: document.getElementById('email').value,
+          password: document.getElementById('password').value,
+        });
+        API.setToken(data.token);
+        localStorage.setItem('lecturer', JSON.stringify(data.lecturer));
+        window.location.href = '/dashboard.html';
+      } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Login';
+      }
+    });
+  </script>
+</body>
+</html>
