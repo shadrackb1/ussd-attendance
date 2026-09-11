@@ -1,45 +1,35 @@
-﻿# USSD Attendance
+# USSD Attendance
 
-<img src="./assets/header.svg" width="100%" alt="header" />
+<img src="./assets/header.svg" width="100%" alt="USSD Attendance" />
 
+Check-in over USSD. Any phone. No app, no camera, no data bundle.
 
-Attendance signing over USSD â€” works on any feature phone, no app install, no smartphone required.
+## Why this exists
 
-## Why USSD
+QR attendance assumes everyone has a working smartphone and data. That is not the default in many Kenyan campuses and training sites. USSD already works for banking. This uses the same channel.
 
-QR-based attendance fails the students who need it most: shared phones, no camera, no data bundle. USSD is already how most of Kenya does banking. This meets that reality.
+## Flow
 
-## How it works
-
-1. Lecturer starts a session â†’ short code + session code issued
-2. Student dials the USSD string on any phone
-3. Server verifies enrollment, session state, and rate limits
-4. Attendance recorded in Postgres; lecturer dashboard updates
+1. Lecturer opens a session. A short code is issued.
+2. Student dials the USSD string on any handset.
+3. Server verifies enrollment and session state, then records attendance.
+4. Lecturer dashboard updates.
 
 ## Security
 
-- JWT for admin/lecturer APIs
-- bcrypt for credentials
-- Enrollment checks before write
-- Rate limiting on the USSD gateway endpoint
-- Firebase Admin for push/status where available
+JWT for lecturer and admin APIs, bcrypt for credentials, enrollment checks before write, rate limits on the gateway endpoint.
 
 ## Stack
 
-- Node.js + Express 5
-- PostgreSQL
-- Firebase Admin
-- JWT + bcrypt
+Node.js, Express 5, PostgreSQL, Firebase Admin, JWT, bcrypt.
 
-## Run
+## Run locally
 
-```bash
-npm install
-cp .env.example .env
-npm run migrate
-npm run dev
-npm test
-```
+    npm install
+    cp .env.example .env
+    npm run migrate
+    npm run dev
+    npm test
 
 ## License
 
