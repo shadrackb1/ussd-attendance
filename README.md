@@ -1,6 +1,9 @@
-# USSD Attendance
+﻿# USSD Attendance
 
-Attendance signing over USSD — works on any feature phone, no app install, no smartphone required.
+<img src="./assets/header.svg" width="100%" alt="header" />
+
+
+Attendance signing over USSD â€” works on any feature phone, no app install, no smartphone required.
 
 ## Why USSD
 
@@ -8,7 +11,7 @@ QR-based attendance fails the students who need it most: shared phones, no camer
 
 ## How it works
 
-1. Lecturer starts a session → short code + session code issued
+1. Lecturer starts a session â†’ short code + session code issued
 2. Student dials the USSD string on any phone
 3. Server verifies enrollment, session state, and rate limits
 4. Attendance recorded in Postgres; lecturer dashboard updates
